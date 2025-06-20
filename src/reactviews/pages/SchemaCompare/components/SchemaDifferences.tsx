@@ -22,6 +22,7 @@ import {
     Checkbox,
     makeStyles,
     Spinner,
+    useArrowNavigationGroup,
 } from "@fluentui/react-components";
 import { SchemaUpdateAction } from "../../../../sharedInterfaces/schemaCompare";
 import { locConstants as loc } from "../../../common/locConstants";
@@ -101,6 +102,7 @@ export const SchemaDifferences = React.forwardRef<HTMLDivElement, Props>(
         const [diffInclusionLevel, setDiffInclusionLevel] = React.useState<
             "allIncluded" | "allExcluded" | "mixed"
         >("allIncluded");
+        const keyboardNavAttr = useArrowNavigationGroup({ axis: "grid" });
 
         // Use the resizable hook
         const {
@@ -197,20 +199,20 @@ export const SchemaDifferences = React.forwardRef<HTMLDivElement, Props>(
             createTableColumn<DiffEntry>({
                 columnId: "type",
                 renderCell: (item) => {
-                    return <TableCell>{item.name}</TableCell>;
+                    return <TableCell role="gridcell">{item.name}</TableCell>;
                 },
             }),
             createTableColumn<DiffEntry>({
                 columnId: "sourceName",
                 renderCell: (item) => {
-                    return <TableCell>{formatName(item.sourceValue)}</TableCell>;
+                    return <TableCell role="gridcell">{formatName(item.sourceValue)}</TableCell>;
                 },
             }),
             createTableColumn<DiffEntry>({
                 columnId: "include",
                 renderCell: (item) => {
                     return (
-                        <TableCell>
+                        <TableCell role="gridcell">
                             <Checkbox
                                 checked={item.included}
                                 onClick={() => handleIncludeExcludeNode(item, !item.included)}
@@ -222,13 +224,17 @@ export const SchemaDifferences = React.forwardRef<HTMLDivElement, Props>(
             createTableColumn<DiffEntry>({
                 columnId: "action",
                 renderCell: (item) => {
-                    return <TableCell>{getLabelForAction(item.updateAction as number)}</TableCell>;
+                    return (
+                        <TableCell role="gridcell">
+                            {getLabelForAction(item.updateAction as number)}
+                        </TableCell>
+                    );
                 },
             }),
             createTableColumn<DiffEntry>({
                 columnId: "targetName",
                 renderCell: (item) => {
-                    return <TableCell>{formatName(item.targetValue)}</TableCell>;
+                    return <TableCell role="gridcell">{formatName(item.targetValue)}</TableCell>;
                 },
             }),
         ];
@@ -310,9 +316,9 @@ export const SchemaDifferences = React.forwardRef<HTMLDivElement, Props>(
                     onClick={() => onDiffSelected(index)}
                     appearance={appearance}
                     className={index === selectedDiffId ? classes.selectedRow : undefined}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell>{formatName(item.sourceValue)}</TableCell>
-                    <TableCell>
+                    <TableCell role="gridcell">{item.name}</TableCell>
+                    <TableCell role="gridcell">{formatName(item.sourceValue)}</TableCell>
+                    <TableCell role="gridcell">
                         <Checkbox
                             checked={item.included}
                             onClick={() => handleIncludeExcludeNode(item, !item.included)}
@@ -320,8 +326,10 @@ export const SchemaDifferences = React.forwardRef<HTMLDivElement, Props>(
                             disabled={context.state.isIncludeExcludeAllOperationInProgress}
                         />
                     </TableCell>
-                    <TableCell>{getLabelForAction(item.updateAction as number)}</TableCell>
-                    <TableCell>{formatName(item.targetValue)}</TableCell>
+                    <TableCell role="gridcell">
+                        {getLabelForAction(item.updateAction as number)}
+                    </TableCell>
+                    <TableCell role="gridcell">{formatName(item.targetValue)}</TableCell>
                 </TableRow>
             );
         };
@@ -333,9 +341,11 @@ export const SchemaDifferences = React.forwardRef<HTMLDivElement, Props>(
                 style={{ height: `${height}px` }}>
                 <Table
                     noNativeElements
+                    role="grid"
                     aria-label="Table with selection"
                     aria-rowcount={rows.length}
-                    style={{ minWidth: "650px" }}>
+                    style={{ minWidth: "650px" }}
+                    {...keyboardNavAttr}>
                     <TableHeader>
                         <TableRow aria-rowindex={1}>
                             <TableHeaderCell className={classes.HeaderCellPadding}>
