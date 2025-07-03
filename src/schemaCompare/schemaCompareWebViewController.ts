@@ -989,18 +989,6 @@ export class SchemaCompareWebViewController extends ReactWebviewPanelController<
         return `${nameParts.join(".")}_${cleanType}`;
     }
 
-    // /**
-    //  * Creates a display name from name parts array
-    //  * @param nameParts The name parts of the object
-    //  * @returns A formatted display name
-    //  */
-    // private createName(nameParts: string[]): string {
-    //     if (!nameParts || nameParts.length === 0) {
-    //         return "";
-    //     }
-    //     return nameParts.join(".");
-    // }
-
     /**
      * Checks if a diff entry should be included based on exclude lists
      * @param diff The diff entry to check
