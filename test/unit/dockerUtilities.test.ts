@@ -218,13 +218,10 @@ suite("Docker Utilities", () => {
         sinon.assert.calledWith(spawnStub, "docker", ["--version"]);
     });
 
-    test("checkEngine: combined test covering multiple scenarios", async () => {
-        // Stub platform and dependent modules
+    test("checkEngine: should succeed on Linux platform with x64 architecture", async () => {
         const platformStub = sandbox.stub(os, "platform");
         const archStub = sandbox.stub(os, "arch");
         const spawnStub = sandbox.stub(childProcess, "spawn");
-        const messageStub = sandbox.stub(vscode.window, "showInformationMessage");
-        archStub.returns("x64");
 
         // Helper to create mock process that succeeds
         const createSuccessProcess = (output: string) => ({
@@ -248,115 +245,224 @@ suite("Docker Utilities", () => {
             }),
         });
 
+        platformStub.returns(Platform.Linux);
+        archStub.returns("x64");
+        spawnStub.returns(createSuccessProcess("") as any);
+
+        const result = await dockerUtils.checkEngine();
+        assert.strictEqual(result.error, undefined);
+        assert.ok(result.success);
+    });
+
+    test("checkEngine: should switch engine on Windows when user confirms", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+        const spawnStub = sandbox.stub(childProcess, "spawn");
+        const messageStub = sandbox.stub(vscode.window, "showInformationMessage");
+
+        // Helper to create mock process that succeeds
+        const createSuccessProcess = (output: string) => ({
+            stdout: {
+                on: sinon.stub().callsFake((event, callback) => {
+                    if (event === "data") setTimeout(() => callback(output), 0);
+                }),
+                pipe: sinon.stub(),
+            },
+            stderr: {
+                on: sinon.stub().callsFake((event, callback) => {
+                    if (event === "data") setTimeout(() => callback(""), 0);
+                }),
+            },
+            stdin: { end: sinon.stub() },
+            on: sinon.stub().callsFake((event, callback) => {
+                if (event === "close") setTimeout(() => callback(0), 5);
+                if (event === "error") {
+                    /* no-op for success case */
+                }
+            }),
+        });
+
+        platformStub.returns(Platform.Windows);
+        archStub.returns("x64");
+        messageStub.resolves("Yes" as any);
+
+        spawnStub
+            .onFirstCall()
+            .returns(
+                createSuccessProcess(
+                    "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+                ) as any,
+            );
+        spawnStub.onSecondCall().returns(createSuccessProcess(Platform.Windows) as any);
+        spawnStub.onThirdCall().returns(createSuccessProcess("") as any);
+
+        const result = await dockerUtils.checkEngine();
+        assert.ok(result.success);
+        sinon.assert.calledThrice(spawnStub);
+    });
+
+    test("checkEngine: should fail when Windows user cancels engine switch", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+        const spawnStub = sandbox.stub(childProcess, "spawn");
+        const messageStub = sandbox.stub(vscode.window, "showInformationMessage");
+
+        // Helper to create mock process that succeeds
+        const createSuccessProcess = (output: string) => ({
+            stdout: {
+                on: sinon.stub().callsFake((event, callback) => {
+                    if (event === "data") setTimeout(() => callback(output), 0);
+                }),
+                pipe: sinon.stub(),
+            },
+            stderr: {
+                on: sinon.stub().callsFake((event, callback) => {
+                    if (event === "data") setTimeout(() => callback(""), 0);
+                }),
+            },
+            stdin: { end: sinon.stub() },
+            on: sinon.stub().callsFake((event, callback) => {
+                if (event === "close") setTimeout(() => callback(0), 5);
+                if (event === "error") {
+                    /* no-op for success case */
+                }
+            }),
+        });
+
+        platformStub.returns(Platform.Windows);
+        archStub.returns("x64");
+        messageStub.resolves(undefined); // User cancels
+
+        spawnStub
+            .onFirstCall()
+            .returns(
+                createSuccessProcess(
+                    "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+                ) as any,
+            );
+        spawnStub.onSecondCall().returns(createSuccessProcess(Platform.Windows) as any);
+
+        const result = await dockerUtils.checkEngine();
+        assert.ok(!result.success);
+        assert.strictEqual(
+            result.fullErrorText,
+            ContainerDeployment.switchToLinuxContainersCanceled,
+        );
+    });
+
+    test("checkEngine: should fail on unsupported architecture", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+
+        platformStub.returns(Platform.Windows);
+        archStub.returns("arm");
+
+        const result = await dockerUtils.checkEngine();
+        assert.ok(!result.success);
+        assert.strictEqual(
+            result.error,
+            ContainerDeployment.unsupportedDockerArchitectureError("arm"),
+        );
+    });
+
+    test("checkEngine: should fail on unsupported platform", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+
+        platformStub.returns("fakePlatform" as Platform);
+        archStub.returns("x64");
+
+        const result = await dockerUtils.checkEngine();
+        assert.ok(!result.success);
+        assert.strictEqual(
+            result.error,
+            ContainerDeployment.unsupportedDockerPlatformError("fakePlatform"),
+        );
+    });
+
+    test("checkEngine: should handle Linux Docker permissions error", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+        const spawnStub = sandbox.stub(childProcess, "spawn");
+
         // Helper to create mock process that fails
         const createFailureProcess = (errorMsg: string) => ({
             stdout: {
                 on: sinon.stub(),
-                pipe: sinon.stub(), // For piped commands
+                pipe: sinon.stub(),
             },
             stderr: {
                 on: sinon.stub().callsFake((event, callback) => {
-                    if (event === "data") setTimeout(() => callback(errorMsg), 0);
+                    if (event === "data") callback(errorMsg);
                 }),
             },
-            stdin: { end: sinon.stub() }, // For piped commands
+            stdin: { end: sinon.stub() },
             on: sinon.stub().callsFake((event, callback) => {
-                if (event === "close") setTimeout(() => callback(1), 5);
+                if (event === "close") setTimeout(() => callback(1), 10);
                 if (event === "error") {
                     /* no-op for controlled failure */
                 }
             }),
         });
 
-        // 1. Linux - success path
         platformStub.returns(Platform.Linux);
-        spawnStub.returns(createSuccessProcess(Platform.Linux) as any);
-
-        let result = await dockerUtils.checkEngine();
-        assert.strictEqual(result.error, undefined, "This should not have an error");
-        assert.ok(result.success, "Linux platform should return success");
-
-        // 2. Windows - engine needs switching, user confirms
-        platformStub.returns(Platform.Windows);
-        spawnStub.resetHistory();
-        spawnStub
-            .onFirstCall()
-            .returns(
-                createSuccessProcess("C:\\Program Files\\Docker\\Docker\\DockerCli.exe") as any,
-            ); // GET_DOCKER_PATH
-        spawnStub.onSecondCall().returns(createSuccessProcess(Platform.Windows) as any); // CHECK_ENGINE (wrong engine)
-        spawnStub.onThirdCall().returns(createSuccessProcess("") as any); // SWITCH_ENGINE
-        messageStub.resolves("Yes" as any);
-
-        result = await dockerUtils.checkEngine();
-        assert.ok(result.success, "Windows with confirmation should switch engine and succeed");
-        sinon.assert.calledThrice(spawnStub);
-
-        // 3. Windows - engine needs switching, user cancels
-        spawnStub.resetHistory();
-        spawnStub
-            .onFirstCall()
-            .returns(
-                createSuccessProcess("C:\\Program Files\\Docker\\Docker\\DockerCli.exe") as any,
-            ); // GET_DOCKER_PATH
-        spawnStub.onSecondCall().returns(createSuccessProcess(Platform.Windows) as any); // CHECK_ENGINE (wrong engine)
-        messageStub.resolves(undefined); // User cancels
-
-        result = await dockerUtils.checkEngine();
-        assert.ok(!result.success, "User cancels engine switch");
-        assert.strictEqual(
-            result.fullErrorText,
-            ContainerDeployment.switchToLinuxContainersCanceled,
-        );
-
-        // 4. Windows- arm architecture, should gracefully error
-        archStub.returns("arm");
-        result = await dockerUtils.checkEngine();
-        assert.ok(!result.success, "Should fail on unsupported architecture");
-        assert.strictEqual(
-            result.error,
-            ContainerDeployment.unsupportedDockerArchitectureError("arm"),
-        );
-
-        // 5. Unsupported platform
         archStub.returns("x64");
-        platformStub.returns("fakePlatform" as Platform); // Fake unsupported platform
-
-        result = await dockerUtils.checkEngine();
-        assert.ok(!result.success);
-        assert.strictEqual(
-            result.error,
-            ContainerDeployment.unsupportedDockerPlatformError("fakePlatform"),
-        );
-
-        // 6. Command fails on Linux (e.g., permissions error)
-        platformStub.returns(Platform.Linux);
-        spawnStub.resetHistory();
         spawnStub.returns(createFailureProcess("Permission denied") as any);
 
-        result = await dockerUtils.checkEngine();
+        const result = await dockerUtils.checkEngine();
         assert.ok(!result.success);
         assert.strictEqual(result.fullErrorText, "Permission denied");
         assert.strictEqual(result.error, ContainerDeployment.linuxDockerPermissionsError);
+    });
 
-        // 7. Command fails on Mac ARM (e.g., Rosetta not enabled)
+    test("checkEngine: should handle Mac ARM Rosetta error", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+        const spawnStub = sandbox.stub(childProcess, "spawn");
+
+        // Helper to create mock process that fails with error event
+        const createFailureProcess = (errorMsg: string) => ({
+            stdout: {
+                on: sinon.stub(),
+                pipe: sinon.stub(),
+            },
+            stderr: {
+                on: sinon.stub().callsFake((event, callback) => {
+                    if (event === "data") callback(errorMsg);
+                }),
+            },
+            stdin: { end: sinon.stub() },
+            on: sinon.stub().callsFake((event, callback) => {
+                if (event === "error") setTimeout(() => callback(new Error(errorMsg)), 0);
+                if (event === "close") {
+                    /* won't be reached if error is triggered first */
+                }
+            }),
+        });
+
         platformStub.returns(Platform.Mac);
         archStub.returns("arm");
-        spawnStub.resetHistory();
-        // For Mac ARM, we need two spawn calls: dockerCmd and grepCmd for the pipe
-        const dockerProcess = createFailureProcess("");
-        const grepProcess = createFailureProcess("Rosetta not Enabled");
-        spawnStub.onFirstCall().returns(dockerProcess as any); // docker cmd
-        spawnStub.onSecondCall().returns(grepProcess as any); // grep cmd
 
-        result = await dockerUtils.checkEngine();
+        // For Mac ARM Rosetta error, the cat command fails (file doesn't exist or permission denied)
+        const dockerProcess = createFailureProcess("Rosetta not Enabled");
+        const grepProcess = createFailureProcess(""); // This won't be reached if dockerProcess fails
+        spawnStub.onFirstCall().returns(dockerProcess as any); // cat settings file fails
+        spawnStub.onSecondCall().returns(grepProcess as any); // grep command
+
+        const result = await dockerUtils.checkEngine();
         assert.ok(!result.success);
         assert.strictEqual(result.fullErrorText, "Rosetta not Enabled");
         assert.strictEqual(result.error, ContainerDeployment.rosettaError);
+    });
 
-        // 8. Intel Mac, command succeeds (no Rosetta check needed)
+    test("checkEngine: should succeed on Intel Mac without Rosetta check", async () => {
+        const platformStub = sandbox.stub(os, "platform");
+        const archStub = sandbox.stub(os, "arch");
+
+        platformStub.returns(Platform.Mac);
         archStub.returns("x64");
-        result = await dockerUtils.checkEngine();
+
+        const result = await dockerUtils.checkEngine();
         assert.ok(result.success);
     });
 
@@ -648,11 +754,17 @@ suite("Docker Utilities", () => {
         spawnStub.resetHistory();
         spawnStub
             .onFirstCall()
-            .returns(createFailureProcess(new Error("Docker not running")) as any); // CHECK_DOCKER_RUNNING
-        spawnStub.onSecondCall().returns(createSuccessProcess("dockerPath") as any); // GET_DOCKER_PATH
-        spawnStub.onThirdCall().returns(createSuccessProcess("Started Docker") as any); // START_DOCKER
-        spawnStub.onCall(3).returns(createFailureProcess(new Error("Docker not running")) as any); // CHECK_DOCKER_RUNNING
-        spawnStub.onCall(4).returns(createSuccessProcess("Docker Running") as any); // CHECK_DOCKER_RUNNING
+            .returns(createFailureProcess(new Error("Docker not running")) as any); // CHECK_DOCKER_RUNNING (initial check)
+        spawnStub
+            .onSecondCall()
+            .returns(
+                createSuccessProcess(
+                    "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
+                ) as any,
+            ); // GET_DOCKER_PATH
+        spawnStub.onThirdCall().returns(createSuccessProcess("Started Docker") as any); // START_DOCKER (execSystemCommand)
+        // For the polling loop that checks if Docker started - make it succeed immediately
+        spawnStub.onCall(3).returns(createSuccessProcess("Docker Running") as any); // First CHECK_DOCKER_RUNNING in polling loop
 
         result = await dockerUtils.startDocker();
         assert.ok(result.success, "Docker should start successfully on Windows");
@@ -664,12 +776,10 @@ suite("Docker Utilities", () => {
         spawnStub.resetHistory();
         spawnStub
             .onFirstCall()
-            .returns(createFailureProcess(new Error("Docker not running")) as any); // CHECK_DOCKER_RUNNING
-        spawnStub.onSecondCall().returns(createSuccessProcess("Started Docker") as any); // START_DOCKER
-        spawnStub
-            .onThirdCall()
-            .returns(createFailureProcess(new Error("Docker not running")) as any); // CHECK_DOCKER_RUNNING
-        spawnStub.onCall(3).returns(createSuccessProcess("Docker Running") as any); // CHECK_DOCKER_RUNNING
+            .returns(createFailureProcess(new Error("Docker not running")) as any); // CHECK_DOCKER_RUNNING (initial check)
+        spawnStub.onSecondCall().returns(createSuccessProcess("Started Docker") as any); // START_DOCKER (execSystemCommand)
+        // For the polling loop that checks if Docker started - make it succeed immediately
+        spawnStub.onCall(2).returns(createSuccessProcess("Docker Running") as any); // First CHECK_DOCKER_RUNNING in polling loop
 
         result = await dockerUtils.startDocker();
         assert.ok(result.success, "Docker should start successfully on Linux");
