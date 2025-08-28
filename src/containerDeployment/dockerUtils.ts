@@ -406,13 +406,6 @@ async function execDockerCommand(cmd: DockerCommand): Promise<string> {
 }
 
 /**
- * Safe system command execution helper for platform-specific system operations
- */
-async function execSystemCommand(cmd: DockerCommand): Promise<string> {
-    return execDockerCommand(cmd);
-}
-
-/**
  * Safe command execution for commands with pipes (using spawn)
  */
 async function execDockerCommandWithPipe(
@@ -709,7 +702,7 @@ export async function startDocker(
 
     try {
         dockerLogger.appendLine("Waiting for Docker to start...");
-        await execSystemCommand(startCommand);
+        await execDockerCommand(startCommand);
 
         let attempts = 0;
         const maxAttempts = 30;
