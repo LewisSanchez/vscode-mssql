@@ -64,6 +64,8 @@ import store from "../queryResult/singletonStore";
 import { SchemaCompareWebViewController } from "../schemaCompare/schemaCompareWebViewController";
 import { SchemaCompare } from "../constants/locConstants";
 import { SchemaDesignerWebviewManager } from "../schemaDesigner/schemaDesignerWebviewManager";
+import { TableExplorerWebViewController } from "../tableExplorer/tableExplorerWebViewController";
+import { TableExplorerService } from "../services/tableExplorerService";
 import { ConnectionNode } from "../objectExplorer/nodes/connectionNode";
 import { CopilotService } from "../services/copilotService";
 import * as Prompts from "../copilot/prompts";
@@ -116,6 +118,7 @@ export default class MainController implements vscode.Disposable {
     public sqlTasksService: SqlTasksService;
     public dacFxService: DacFxService;
     public schemaCompareService: SchemaCompareService;
+    public tableExplorerService: TableExplorerService;
     public sqlProjectsService: SqlProjectsService;
     public azureAccountService: AzureAccountService;
     public azureResourceService: AzureResourceService;
@@ -503,6 +506,7 @@ export default class MainController implements vscode.Disposable {
             this.dacFxService = new DacFxService(SqlToolsServerClient.instance);
             this.sqlProjectsService = new SqlProjectsService(SqlToolsServerClient.instance);
             this.schemaCompareService = new SchemaCompareService(SqlToolsServerClient.instance);
+            this.tableExplorerService = new TableExplorerService(SqlToolsServerClient.instance);
             const azureResourceController = new AzureResourceController();
             this.azureAccountService = new AzureAccountService(
                 this._connectionMgr.azureController,
@@ -1514,6 +1518,12 @@ export default class MainController implements vscode.Disposable {
                     async () => {
                         await this.onSchemaCompare();
                     },
+                ),
+            );
+
+            this._context.subscriptions.push(
+                vscode.commands.registerCommand(Constants.cmdTableExplorer, async (node: any) =>
+                    this.onTableExplorer(node),
                 ),
             );
 
@@ -2614,6 +2624,18 @@ export default class MainController implements vscode.Disposable {
         );
 
         schemaCompareWebView.revealToForeground();
+    }
+
+    public async onTableExplorer(node?: any): Promise<void> {
+        const tableExplorerWebView = new TableExplorerWebViewController(
+            this._context,
+            this._vscodeWrapper,
+            this.tableExplorerService,
+            this._connectionMgr,
+            node,
+        );
+
+        tableExplorerWebView.revealToForeground();
     }
 
     /**
