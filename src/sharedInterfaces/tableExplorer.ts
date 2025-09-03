@@ -54,7 +54,7 @@ export interface EditReferencedTableInfo {
     ReferencedColumns: string[];
 }
 
-//#region  edit/initialize
+//#region edit/initialize
 
 export interface EditInitializeParams extends IEditSessionOperationParams {
     filters: EditInitializeFiltering;
