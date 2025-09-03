@@ -68,7 +68,7 @@ export interface EditInitializeResult {}
 
 //#endregion
 
-// #region edit/sessionReady Event
+//#region edit/sessionReady Event
 
 export interface EditSessionReadyParams {
     ownerUri: string;
@@ -156,7 +156,7 @@ export interface EditDisposeResult {}
 
 //#endregion
 
-// #region edit/script
+//#region edit/script
 
 export interface EditScriptParams extends IEditSessionOperationParams {}
 
@@ -170,7 +170,7 @@ export interface EditScriptResult {
 
 export interface EditGetReferencedTablesParams extends IEditSessionOperationParams {}
 
-export interface GetReferencedTablesResult {
+export interface EditGetReferencedTablesResult {
     referencedTables: EditReferencedTableInfo[];
 }
 
