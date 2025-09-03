@@ -68,6 +68,16 @@ export interface EditInitializeResult {}
 
 //#endregion
 
+// #region edit/sessionReady Event
+
+export interface EditSessionReadyParams {
+    ownerUri: string;
+    success: boolean;
+    message: string;
+}
+
+//#endregion
+
 //#region edit/subset
 
 export interface EditSubsetParams extends IEditSessionOperationParams {
