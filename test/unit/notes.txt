@@ -1,0 +1,81 @@
+Table Explorer/Edit Data
+
+When the feature is initially opened in Azure Data Studio, these endpoints are hit:
+
+- HandleInitializeRequest
+	- is the first method that is called and it's purpose is to initialize an edit data session for modifying database table data.
+	- The method essentially prepares everything needed to start editing data in a database table/view, including establishing connections,
+	  setting up query execution capabilities, and registering event handlers for asynchronous operations.
+- HandleSubsetRequest
+	- retrieves a subset of rows from an active edit session
+	- This method is used for pagination/virtualization of data in the edit session, allowing clients to request specific ranges of rows
+	  rather than loading all data at once.
+- HandleCommitRequest
+	- commits pending edits (inserts, updates, deletes) to the database.
+	- This executes all pending changes (row additions, deletions, cell updates) that have been accumulated in the edit session, persisting
+	  them to the actual database. If any exception occurs during this process, it's caught and the failure handler is invoked.
+
+
+
+When the feature needs to create a new table row and a value is added, these endpoints are hit:
+
+- HandleCreateRowRequest
+	- creates a new row in the edit session.
+	- This method essentially adds a new empty row to the edit session that can then be populated with data before being committed to the database.
+- HandleUpdateCellRequest
+	- updates a cell value in the edit session.
+	- This method modifies a single cell's value in the edit session, storing the change until it's committed to the database via HandleCommitRequest.
+- HandleSubsetRequest
+	- retrieves a subset of rows from an active edit session
+	- This method is used for pagination/virtualization of data in the edit session, allowing clients to request specific ranges of rows
+	  rather than loading all data at once.
+
+
+
+- When the feature has already made a new row, and a value is being added, these endpoints are hit:
+
+- HandleUpdateCellRequest
+	- updates a cell value in the edit session.
+	- This method modifies a single cell's value in the edit session, storing the change until it's committed to the database via HandleCommitRequest.
+- HandleCommitRequest
+	- commits pending edits (inserts, updates, deletes) to the database.
+	- This executes all pending changes (row additions, deletions, cell updates) that have been accumulated in the edit session, persisting
+	  them to the actual database. If any exception occurs during this process, it's caught and the failure handler is invoked.
+
+
+When the feature has made a new row, and the revert row option is selected from the table row context menu:
+(REVERTING ROWS ONLY WORKS AS LONG AS HandleCommitRequest HASN'T BEEN CALLED FOR THAT GIVEN ROW)
+
+- HandleRevertRowRequest
+	- reverts all changes made to a specific row in the edit session.
+	- This method discards any pending changes (updates, deletes) for an entire row, restoring it to its original state before any edits were made.
+	  It's useful when users want to cancel all modifications they've made to a particular row without affecting other edited rows.
+- HandleSubsetRequest
+	- retrieves a subset of rows from an active edit session
+	- This method is used for pagination/virtualization of data in the edit session, allowing clients to request specific ranges of rows
+	  rather than loading all data at once.
+
+
+
+When the feature wants to delete a row:
+
+- HandleDeleteRowRequest
+	- marks a row for deletion in the edit session.
+	- The comment on line 114 clarifies this is adding the delete operation to the "edit cache" - meaning the row isn't immediately deleted from the
+	  database, but rather marked for deletion in the session. The actual deletion happens when HandleCommitRequest is called to persist all pending changes.
+- HandleCommitRequest
+	- commits pending edits (inserts, updates, deletes) to the database.
+	- This executes all pending changes (row additions, deletions, cell updates) that have been accumulated in the edit session, persisting
+	  them to the actual database. If any exception occurs during this process, it's caught and the failure handler is invoked.
+- HandleSubsetRequest
+	- retrieves a subset of rows from an active edit session
+	- This method is used for pagination/virtualization of data in the edit session, allowing clients to request specific ranges of rows
+	  rather than loading all data at once.
+
+
+When the feature is closed in Azure Data Studio, these endpoints are hit:
+
+- HandleDisposeRequest
+	- cleans up and removes an edit session.
+	- This method is used to clean up resources when a client is done editing data, removing the session from memory and freeing up any
+	  associated resources. It's essentially the cleanup/disposal operation for an edit session.
